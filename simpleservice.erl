@@ -18,7 +18,11 @@ handle_request(Sock, Functions) ->
    
     MethodAtom=convert_method_to_atom(Method),
     Function=get_function(MethodAtom, Functions),
-    Function(Headers, Body, Sock),
+    io:format("function is ~p", [Function]), 
+    case Function of 
+	error-> gen_tcp:send(Sock, lists:flatten(["HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain; charset=UTF-8\r\nConnection: close\r\n\r\n", "Method", " is not supported by this service.\r\n\r\n"]));
+	_->     Function(Headers, Body, Sock)
+    end,
     gen_tcp:close(Sock).
 
 get_function(MethodAtom, [Head|Tail])->
@@ -28,7 +32,7 @@ get_function(MethodAtom, [Head|Tail])->
 		_ ->get_function(MethodAtom, Tail)
 		 end;
 get_function(MethodAtom, []) ->
-    err.
+    error.
 
 marshall_request(Sock, Method) ->
 	 headers(Sock, Method, []).
@@ -58,5 +62,8 @@ read_body(Sock, Headers)->
 convert_method_to_atom(Method)->
     case (Method) of 
 		'GET' -> get;
-		'POST' -> post
+		'POST' -> post;
+		'DELETE' -> delete;
+		'PUT' -> put
+    
     end.
