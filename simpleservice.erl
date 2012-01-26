@@ -13,11 +13,9 @@ loop(ListenSock, Functions) ->
 
 handle_request(Sock, Functions) ->
     {ok, {http_request, Method, Path, Version}}=gen_tcp:recv(Sock, 0),
-    io:fwrite("path: ~p", [Path]),
     {abs_path,AbsPath}=Path,
     {Headers, Body}=marshall_request(Sock, Method),
     {PathString, QueryString, Params, Fragment}=handle_path(AbsPath),
-        io:fwrite("params: ~p", [Params]),
     Function=get_function(Method, Functions),
     case Function of 
 	error-> gen_tcp:send(Sock, lists:flatten(["HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain; charset=UTF-8\r\nConnection: close\r\n\r\n", atom_to_list(Method), " is not supported by this service.\r\n\r\n"]));
