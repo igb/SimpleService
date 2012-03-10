@@ -2,7 +2,7 @@ GetFunction=fun(Sock, PathString, QueryString, Params, Fragment, Headers, Body)-
 		      		  gen_tcp:send(Sock, "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nConnection: close\r\n\r\nHelo World!\r\n\r\n") 
 		      end.
 
-Functions=[{'GET', F}].
+Functions=[{'GET', GetFunction}].
 
 simpleservice:start(8000, Functions).
 
