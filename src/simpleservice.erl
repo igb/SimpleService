@@ -1,17 +1,21 @@
 -module(simpleservice).
--export([start/2, loop/2, handle_request/2, separate_path_parts/2, extract_params/1]).
+-export([start/2, start/3, loop/3, handle_request/3, separate_path_parts/2, extract_params/1]).
+
 
 start(Port, Functions)->    
+    start(Port, Functions, null).
+
+start(Port, Functions, Pid)->    
     {ok, ListenSock}=gen_tcp:listen(Port, [list,{active, false},{packet,http}]),
-    ?MODULE:loop(ListenSock, Functions).
+    ?MODULE:loop(ListenSock, Functions, Pid).
 
-loop(ListenSock, Functions) ->
+loop(ListenSock, Functions, Pid) ->
     {ok, Sock}=gen_tcp:accept(ListenSock),
-    spawn(?MODULE, handle_request, [Sock, Functions]),
-    ?MODULE:loop(ListenSock, Functions).
+    spawn(?MODULE, handle_request, [Sock, Functions, Pid]),
+    ?MODULE:loop(ListenSock, Functions, Pid).
 
 
-handle_request(Sock, Functions) ->
+handle_request(Sock, Functions, Pid) ->
     {ok, {http_request, Method, Path, Version}}=gen_tcp:recv(Sock, 0),
     {abs_path,AbsPath}=Path,
     {Headers, Body}=marshall_request(Sock, Method),
@@ -19,7 +23,10 @@ handle_request(Sock, Functions) ->
     Function=get_function(Method, Functions),
     case Function of 
 	error-> gen_tcp:send(Sock, lists:flatten(["HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain; charset=UTF-8\r\nConnection: close\r\n\r\n", atom_to_list(Method), " is not supported by this service.\r\n\r\n"]));
-	_->     Function(Sock, PathString, QueryString, Params, Fragment, Headers, Body)
+	_->     case Pid of
+		    null -> Function(Sock, PathString, QueryString, Params, Fragment, Headers, Body);
+		    _  -> Function(Sock, PathString, QueryString, Params, Fragment, Headers, Body, Pid)
+		end
     end,
     gen_tcp:close(Sock).
 
