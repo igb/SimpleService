@@ -4,7 +4,11 @@ GetFunction=fun(Sock, PathString, QueryString, Params, Fragment, Headers, Body)-
 
 Functions=[{'GET', GetFunction}].
 
-simpleservice:start(8000, Functions).
+simpleservice:start(8000, Functions). 
+
+%% you can also pass a Pid to facilitate dispatches to spawned process or 
+%% other service with simpleservice:start/3
+%% Example: simpleservice:start(8000, Functions, MyPid). 
 
 
 curl -v 127.0.0.1:8000/hello
