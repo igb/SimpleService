@@ -1,5 +1,5 @@
 -module(simpleservice).
--export([start/2, start/3, loop/3, handle_request/3, separate_path_parts/2, extract_params/1]).
+-export([start/2, start/3, loop/3, handle_request/3, separate_path_parts/2, extract_params/1, send_html_message/2, send_plaintext_message/2, send_message/5]).
 
 
 start(Port, Functions)->    
@@ -22,7 +22,7 @@ handle_request(Sock, Functions, Pid) ->
     {PathString, QueryString, Params, Fragment}=handle_path(AbsPath),
     Function=get_function(Method, Functions),
     case Function of 
-	error-> gen_tcp:send(Sock, lists:flatten(["HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain; charset=UTF-8\r\nConnection: close\r\n\r\n", atom_to_list(Method), " is not supported by this service.\r\n\r\n"]));
+	error-> send_message(Sock, lists:flatten([atom_to_list(Method), " is not supported by this service."]), "text/plain", 501, "Not Implemented");
 	_->     case Pid of
 		    null -> Function(Sock, PathString, QueryString, Params, Fragment, Headers, Body);
 		    _  -> Function(Sock, PathString, QueryString, Params, Fragment, Headers, Body, Pid)
@@ -30,7 +30,18 @@ handle_request(Sock, Functions, Pid) ->
     end,
     gen_tcp:close(Sock).
 
+send_html_message(Sock,Message)->
+    send_message(Sock, Message, "text/html", 200, "OK").
 
+send_plaintext_message(Sock,Message)->
+    send_message(Sock, Message, "text/plain", 200, "OK").
+
+send_message(Sock, Message, ContentType, StatusCode, StatusDescription)->
+    gen_tcp:send(Sock, lists:flatten(["HTTP/1.1 ", io_lib:format("~p", [StatusCode]), StatusDescription, "\r\nContent-Type: ", ContentType, "; charset=UTF-8\r\nConnection: close\r\n\r\n", Message,"\r\n\r\n"])).
+    
+
+
+				  
 separate_path_parts(Path, Token)->
     PartList=string:tokens(Path, Token),
     [PathString|Part]=PartList,
