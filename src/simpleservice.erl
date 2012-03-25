@@ -37,7 +37,7 @@ send_plaintext_message(Sock,Message)->
     send_message(Sock, Message, "text/plain", 200, "OK").
 
 send_message(Sock, Message, ContentType, StatusCode, StatusDescription)->
-    gen_tcp:send(Sock, lists:flatten(["HTTP/1.1 ", io_lib:format("~p", [StatusCode]), StatusDescription, "\r\nContent-Type: ", ContentType, "; charset=UTF-8\r\nConnection: close\r\n\r\n", Message,"\r\n\r\n"])).
+    gen_tcp:send(Sock, lists:flatten(["HTTP/1.1 ", io_lib:format("~p ", [StatusCode]), StatusDescription, "\r\nContent-Type: ", ContentType, "; charset=UTF-8\r\nConnection: close\r\n\r\n", Message,"\r\n\r\n"])).
     
 
 
