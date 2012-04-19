@@ -1,4 +1,5 @@
 -module(simpleservice).
+-import(inets).
 -export([start/2, start/3, loop/3, handle_request/3, separate_path_parts/2, extract_params/1, send_html_message/2, send_plaintext_message/2, send_message/5]).
 
 
