@@ -19,7 +19,7 @@ handle_request(Sock, Functions, Pid) ->
     {ok, {http_request, Method, Path, Version}}=gen_tcp:recv(Sock, 0),
     {abs_path,AbsPath}=Path,
     {Headers, Body}=marshall_request(Sock, Method),
-    {PathString, QueryString, Params, Fragment}=handle_path(AbsPath),
+    {PathString, QueryString, Params, Fragment}=handle_path(http_uri:decode(AbsPath)),
     Function=get_function(Method, Functions),
     case Function of 
 	error-> send_message(Sock, lists:flatten([atom_to_list(Method), " is not supported by this service."]), "text/plain", 501, "Not Implemented");
