@@ -3,6 +3,6 @@
   {vsn, "1"},
   {modules, [simpleservice]},
   {registered, []},
-  { applications, [kernel,stdlib] },
+  { applications, [inets,kernel,stdlib] },
   { env, [] }
 ]}.
