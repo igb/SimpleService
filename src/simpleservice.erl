@@ -19,7 +19,7 @@ handle_request(Sock, Functions, Pid) ->
     {ok, {http_request, Method, Path, Version}}=gen_tcp:recv(Sock, 0),
     {abs_path,AbsPath}=Path,
     {Headers, Body}=marshall_request(Sock, Method),
-    {PathString, QueryString, Params, Fragment}=handle_path(http_uri:decode(AbsPath)),
+    {PathString, QueryString, Params, Fragment}=handle_path(decode(AbsPath)),
     Function=get_function(Method, Functions),
     case Function of 
 	error-> send_message(Sock, lists:flatten([atom_to_list(Method), " is not supported by this service."]), "text/plain", 501, "Not Implemented");
@@ -105,3 +105,23 @@ read_body(Sock, Headers)->
 	{ok, Body} -> {Headers, Body};
 	_ -> {error, "We No Habeas Corpus!"}
     end.
+
+
+%% taking this from inets/http_uri cause I can't seem to figure out import/export
+
+
+decode(String) ->
+    do_decode(String).
+
+do_decode([$%,Hex1,Hex2|Rest]) ->
+    [hex2dec(Hex1)*16+hex2dec(Hex2)|do_decode(Rest)];
+do_decode([First|Rest]) ->
+    [First|do_decode(Rest)];
+do_decode([]) ->
+    [].
+
+hex2dec(X) when (X>=$0) andalso (X=<$9) -> X-$0;
+hex2dec(X) when (X>=$A) andalso (X=<$F) -> X-$A+10;
+hex2dec(X) when (X>=$a) andalso (X=<$f) -> X-$a+10.
+
+
