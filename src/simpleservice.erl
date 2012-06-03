@@ -18,8 +18,7 @@ loop(ListenSock, Functions, Pid) ->
 handle_request(Sock, Functions, Pid) ->
     {ok, {http_request, Method, Path, Version}}=gen_tcp:recv(Sock, 0),
     {abs_path,AbsPath}=Path,
-    {Headers, Body}=marshall_request(Sock, Method),
-    {PathString, QueryString, Params, Fragment}=handle_path(decode(AbsPath)),
+    {Headers, Body, PathString, QueryString,Params, Fragment}=marshall_request(Sock, Method, AbsPath),        
     Function=get_function(Method, Functions),
     case Function of 
 	error-> send_message(Sock, lists:flatten([atom_to_list(Method), " is not supported by this service."]), "text/plain", 501, "Not Implemented");
@@ -66,7 +65,7 @@ extract_params(QueryString)->
 	      case length(Tokens) of
 		  2 ->
 		      [Name|[Value|_]]=Tokens,
-		      {Name, Value};
+		      {Name, decode(re:replace(Value,"\\\+"," ",[global, {return,list}]))};
 		  _ -> lists:flatten(Tokens)
 	      end
       end,
@@ -82,8 +81,16 @@ get_function(MethodAtom, [Head|Tail])->
 get_function(MethodAtom, []) ->
     error.
 
-marshall_request(Sock, Method) ->
-    headers(Sock, Method, []).
+marshall_request(Sock, Method, AbsPath) ->    
+    {Headers, Body}=headers(Sock, Method, []),
+    {PathString, QueryString, PathParams, Fragment}=handle_path(decode(AbsPath)),
+    ContentType=lists:keyfind('Content-Type', 1, Headers),
+    case ContentType of 
+	{_,"application/x-www-form-urlencoded"} ->BodyParams=extract_params(Body),{Headers, Body, PathString, QueryString, BodyParams, Fragment};
+	_->{Headers, Body, PathString, QueryString, PathParams, Fragment}
+    end.
+
+
 
 headers(Sock, Method, Headers) ->
     case gen_tcp:recv(Sock, 0) of	
@@ -99,11 +106,30 @@ body(Sock, Method, Headers) ->
 	'DELETE' -> {Headers, []}    
     end.
 
+
 read_body(Sock, Headers)->
     inet:setopts(Sock, [{packet, raw}]),
-    case gen_tcp:recv(Sock, 0) of
+    ContentLength=lists:keyfind('Content-Length', 1, Headers),
+    {_,Length}=ContentLength,
+    LengthInt=list_to_integer(Length),
+    case LengthInt of 
+	0 -> {Headers, []};
+	_ ->{ok,Body}=gen_tcp:recv(Sock, LengthInt),
+	    {Headers, Body}
+    end.
+
+
+
+read_body(Sock, Headers, Count)->
+    inet:setopts(Sock, [{packet, raw}]),
+    case gen_tcp:recv(Sock, 0, 1000) of
 	{ok, Body} -> {Headers, Body};
-	_ -> {error, "We No Habeas Corpus!"}
+	{error, timeout}-> 
+	    case Count of 
+		3 -> {error, "We No Habeas Corpus! (too many tries)"};
+		_ -> read_body(Sock, Headers, Count + 1)
+	    end;
+	_ ->{error, "We No Habeas Corpus!"}
     end.
 
 
