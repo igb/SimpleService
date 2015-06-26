@@ -110,12 +110,15 @@ body(Sock, Method, Headers) ->
 read_body(Sock, Headers)->
     inet:setopts(Sock, [{packet, raw}]),
     ContentLength=lists:keyfind('Content-Length', 1, Headers),
-    {_,Length}=ContentLength,
-    LengthInt=list_to_integer(Length),
-    case LengthInt of 
-	0 -> {Headers, []};
-	_ ->{ok,Body}=gen_tcp:recv(Sock, LengthInt),
-	    {Headers, Body}
+    
+    case ContentLength of
+    	 false -> {Headers, []};
+	 {_,Length} -> LengthInt=list_to_integer(Length),
+    	 	       case LengthInt of 
+		       	    0 -> {Headers, []};
+			    _ ->{ok,Body}=gen_tcp:recv(Sock, LengthInt),
+	    		    {Headers, Body}
+    		       end
     end.
 
 
