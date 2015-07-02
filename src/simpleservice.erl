@@ -1,5 +1,5 @@
 -module(simpleservice).
--export([start/2, start/3, loop/3, handle_request/3, separate_path_parts/2, extract_params/1, send_html_message/2, send_plaintext_message/2, send_message/5]).
+-export([start/2, start/3, start_ssl/4, start_ssl/5, loop/3, handle_request/3, separate_path_parts/2, extract_params/1, send_html_message/2, send_plaintext_message/2, send_message/5]).
 
 
 start(Port, Functions)->    
@@ -9,14 +9,28 @@ start(Port, Functions, Pid)->
     {ok, ListenSock}=gen_tcp:listen(Port, [list,{active, false},{packet,http}]),
     ?MODULE:loop(ListenSock, Functions, Pid).
 
+start_ssl(Port, Functions, Cert, Key)->    
+    start_ssl(Port, Functions, Cert, Key, null).
+
+start_ssl(Port, Functions, Cert, Key, Pid)->
+    ssl:start(),
+    {ok, ListenSock} = ssl:listen(Port, [list,{active, false},{packet,http},{certfile, Cert}, {keyfile, Key}]),		    
+    ?MODULE:loop(ListenSock, Functions, Pid).
+
 loop(ListenSock, Functions, Pid) ->
-    {ok, Sock}=gen_tcp:accept(ListenSock),
+    case ListenSock of
+   	{sslsocket,_,_} ->{ok, Sock} = ssl:transport_accept(ListenSock), ssl:ssl_accept(Sock);		 
+		      _ -> {ok, Sock}=gen_tcp:accept(ListenSock)
+    end,
     spawn(?MODULE, handle_request, [Sock, Functions, Pid]),
     ?MODULE:loop(ListenSock, Functions, Pid).
 
 
 handle_request(Sock, Functions, Pid) ->
-    {ok, {http_request, Method, Path, Version}}=gen_tcp:recv(Sock, 0),
+     case Sock of 
+    	 {sslsocket, _,_} -> {ok, {http_request, Method, Path, Version}}=ssl:recv(Sock, 0);
+	 	        _ -> {ok, {http_request, Method, Path, Version}}=gen_tcp:recv(Sock, 0)
+    end,
     {abs_path,AbsPath}=Path,
     {Headers, Body, PathString, QueryString,Params, Fragment}=marshall_request(Sock, Method, AbsPath),        
     Function=get_function(Method, Functions),
@@ -27,7 +41,7 @@ handle_request(Sock, Functions, Pid) ->
 		    _  -> Function(Sock, PathString, QueryString, Params, Fragment, Headers, Body, Pid)
 		end
     end,
-    gen_tcp:close(Sock).
+    close(Sock).
 
 send_html_message(Sock,Message)->
     send_message(Sock, Message, "text/html", 200, "OK").
@@ -38,11 +52,15 @@ send_plaintext_message(Sock,Message)->
 send_message(Sock, Message, ContentType, StatusCode, StatusDescription)->
     case Message of
 	nil -> 
-	    gen_tcp:send(Sock, lists:flatten(["HTTP/1.1 ", io_lib:format("~p ", [StatusCode]), StatusDescription, "\r\nContent-Type: ", ContentType, "; charset=UTF-8\r\nConnection: close\r\n\r\n"]));
+	    MessageContent = lists:flatten(["HTTP/1.1 ", io_lib:format("~p ", [StatusCode]), StatusDescription, "\r\nContent-Type: ", ContentType, "; charset=UTF-8\r\nConnection: close\r\n\r\n"]);
+	   
 	_ ->
-	    gen_tcp:send(Sock, lists:flatten(["HTTP/1.1 ", io_lib:format("~p ", [StatusCode]), StatusDescription, "\r\nContent-Type: ", ContentType, "; charset=UTF-8\r\nConnection: close\r\n\r\n", Message,"\r\n\r\n"]))
-    end.
-    
+	  MessageContent = lists:flatten(["HTTP/1.1 ", io_lib:format("~p ", [StatusCode]), StatusDescription, "\r\nContent-Type: ", ContentType, "; charset=UTF-8\r\nConnection: close\r\n\r\n", Message,"\r\n\r\n"])
+    end,
+ case Sock of
+       {sslsocket, _,_} ->  ssl:send(Sock, MessageContent);
+       		      _ ->  gen_tcp:send(Sock, MessageContent)
+  end.
 
 
 				  
@@ -81,7 +99,8 @@ get_function(MethodAtom, [Head|Tail])->
 get_function(MethodAtom, []) ->
     error.
 
-marshall_request(Sock, Method, AbsPath) ->    
+marshall_request(Sock, Method, AbsPath) -> 
+   
     {Headers, Body}=headers(Sock, Method, []),
     {PathString, QueryString, PathParams, Fragment}=handle_path(decode(AbsPath)),
     ContentType=lists:keyfind('Content-Type', 1, Headers),
@@ -93,12 +112,14 @@ marshall_request(Sock, Method, AbsPath) ->
 
 
 headers(Sock, Method, Headers) ->
-    case gen_tcp:recv(Sock, 0) of	
+   
+    case recv(Sock, 0) of	
 	{ok, http_eoh} -> body(Sock, Method, Headers);
 	{ok, {http_header,_,HeaderName,_, HeaderValue}} -> headers(Sock, Method, lists:append([{HeaderName, HeaderValue}], Headers))
     end.
 
 body(Sock, Method, Headers) ->
+   
     case (Method) of 
 	'GET' -> {Headers, []};
 	'POST' -> read_body(Sock, Headers);
@@ -108,6 +129,7 @@ body(Sock, Method, Headers) ->
 
 
 read_body(Sock, Headers)->
+   
     inet:setopts(Sock, [{packet, raw}]),
     ContentLength=lists:keyfind('Content-Length', 1, Headers),
     
@@ -116,7 +138,7 @@ read_body(Sock, Headers)->
 	 {_,Length} -> LengthInt=list_to_integer(Length),
     	 	       case LengthInt of 
 		       	    0 -> {Headers, []};
-			    _ ->{ok,Body}=gen_tcp:recv(Sock, LengthInt),
+			    _ ->{ok,Body}=recv(Sock, LengthInt),
 	    		    {Headers, Body}
     		       end
     end.
@@ -124,8 +146,9 @@ read_body(Sock, Headers)->
 
 
 read_body(Sock, Headers, Count)->
+ 
     inet:setopts(Sock, [{packet, raw}]),
-    case gen_tcp:recv(Sock, 0, 1000) of
+    case recv(Sock, 0, 1000) of
 	{ok, Body} -> {Headers, Body};
 	{error, timeout}-> 
 	    case Count of 
@@ -133,6 +156,27 @@ read_body(Sock, Headers, Count)->
 		_ -> read_body(Sock, Headers, Count + 1)
 	    end;
 	_ ->{error, "We No Habeas Corpus!"}
+    end.
+
+
+recv(Sock, Length)->
+    F=get_recv_for_protocol(Sock, 2),
+    F(Sock, Length).	   
+
+recv(Sock, Length, Timeout)->
+    F=get_recv_for_protocol(Sock, 3),
+    F(Sock, Length, Timeout).	   
+
+get_recv_for_protocol(Sock, Arity)->
+    case Sock of
+      {sslsocket,_,_} -> fun ssl:recv/Arity;
+	_ -> fun gen_tcp:recv/Arity
+    end.
+
+close(Sock)->
+    case Sock of
+      {sslsocket,_,_} -> ssl:close(Sock);
+        _ -> gen_tcp:close(Sock)
     end.
 
 
