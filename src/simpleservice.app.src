@@ -1,6 +1,6 @@
 {application, simpleservice, [
   {description, "Simple HTTP/REST service wrapper."},
-  {vsn, "2.0"},
+  {vsn, "2.1"},
   {modules, [simpleservice]},
   {registered, []},
   { applications, [kernel,stdlib] },
