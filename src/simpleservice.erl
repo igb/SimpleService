@@ -151,8 +151,10 @@ body(Sock, Method, Headers) ->
 
 
 read_body(Sock, Headers)->
-   
-    inet:setopts(Sock, [{packet, raw}]),
+    case Sock of
+        {sslsocket,_,_} -> ssl:setopts(Sock, [{packet, raw}]);
+        _ -> inet:setopts(Sock, [{packet, raw}])
+    end,
     ContentLength=lists:keyfind('Content-Length', 1, Headers),
     
     case ContentLength of
@@ -169,7 +171,10 @@ read_body(Sock, Headers)->
 
 read_body(Sock, Headers, Count)->
  
-    inet:setopts(Sock, [{packet, raw}]),
+    case Sock of
+        {sslsocket,_,_} -> ssl:setopts(Sock, [{packet, raw}]);
+        _ -> inet:setopts(Sock, [{packet, raw}])
+    end,
     case recv(Sock, 0, 1000) of
 	{ok, Body} -> {Headers, Body};
 	{error, timeout}-> 
