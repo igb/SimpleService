@@ -1,5 +1,5 @@
 -module(simpleservice).
--export([start/2, start/3, start_ssl/4, start_ssl/5, loop/3, handle_request/3, separate_path_parts/2, extract_params/1, send_html_message/2, send_plaintext_message/2, send_message/5]).
+-export([start/2, start/3, start_ssl/4, start_ssl/5, loop/3, handle_request/3, separate_path_parts/2, extract_params/1, send_html_message/2, send_html_message/3, send_plaintext_message/2, send_plaintext_message/3, send_message/5, send_message/6]).
 
 
 start(Port, Functions)->    
