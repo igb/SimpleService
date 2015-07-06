@@ -27,6 +27,7 @@ loop(ListenSock, Functions, Pid) ->
 
 
 handle_request(Sock, Functions, Pid) ->
+     io:fwrite("sock: ~p", [Sock]),		     
      case Sock of 
     	 {sslsocket, _,_} -> {ok, {http_request, Method, Path, Version}}=ssl:recv(Sock, 0);
 	 	        _ -> {ok, {http_request, Method, Path, Version}}=gen_tcp:recv(Sock, 0)
@@ -44,18 +45,27 @@ handle_request(Sock, Functions, Pid) ->
     close(Sock).
 
 send_html_message(Sock,Message)->
-    send_message(Sock, Message, "text/html", 200, "OK").
+  send_html_message(Sock,Message, []).
+
+send_html_message(Sock,Message, Headers)->
+    send_message(Sock, Message, "text/html", 200, "OK", Headers).
 
 send_plaintext_message(Sock,Message)->
-    send_message(Sock, Message, "text/plain", 200, "OK").
+    send_plaintext_message(Sock,Message,[]).
+
+send_plaintext_message(Sock,Message,Headers)->
+    send_message(Sock, Message, "text/plain", 200, "OK", Headers).
 
 send_message(Sock, Message, ContentType, StatusCode, StatusDescription)->
+   send_message(Sock, Message, ContentType, StatusCode, StatusDescription, []).
+
+send_message(Sock, Message, ContentType, StatusCode, StatusDescription, Headers)->
     case Message of
 	nil -> 
-	    MessageContent = lists:flatten(["HTTP/1.1 ", io_lib:format("~p ", [StatusCode]), StatusDescription, "\r\nContent-Type: ", ContentType, "; charset=UTF-8\r\nConnection: close\r\n\r\n"]);
+	    MessageContent = lists:flatten(["HTTP/1.1 ", io_lib:format("~p ", [StatusCode]), StatusDescription, "\r\nContent-Type: ", ContentType, "; charset=UTF-8\r\n", flatten_http_headers(Headers),"Connection: close\r\n\r\n"]);
 	   
 	_ ->
-	  MessageContent = lists:flatten(["HTTP/1.1 ", io_lib:format("~p ", [StatusCode]), StatusDescription, "\r\nContent-Type: ", ContentType, "; charset=UTF-8\r\nConnection: close\r\n\r\n", Message,"\r\n\r\n"])
+	  MessageContent = lists:flatten(["HTTP/1.1 ", io_lib:format("~p ", [StatusCode]), StatusDescription, "\r\nContent-Type: ", ContentType, "; charset=UTF-8\r\n", flatten_http_headers(Headers),"Connection: close\r\n\r\n", Message,"\r\n\r\n"])
     end,
  case Sock of
        {sslsocket, _,_} ->  ssl:send(Sock, MessageContent);
@@ -63,7 +73,13 @@ send_message(Sock, Message, ContentType, StatusCode, StatusDescription)->
   end.
 
 
-				  
+flatten_http_headers(Headers)->
+	HeadersList=[lists:flatten([Header, ": ", Value, "\r\n"]) || {Header, Value} <- Headers],
+	lists:flatten(HeadersList).  
+
+
+
+
 separate_path_parts(Path, Token)->
     PartList=string:tokens(Path, Token),
     [PathString|Part]=PartList,
@@ -198,3 +214,11 @@ hex2dec(X) when (X>=$A) andalso (X=<$F) -> X-$A+10;
 hex2dec(X) when (X>=$a) andalso (X=<$f) -> X-$a+10.
 
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+flatten_http_headers_test()->
+   Headers=[{"Header1", "Value1"},{"Header2", "Value2"},{"Header3", "Value3"}],
+    ?assert(flatten_http_headers(Headers) =:= "Header1: Value1\r\nHeader2: Value2\r\nHeader3: Value3\r\n"),
+    ?assert(flatten_http_headers([]) =:= ""). 
+-endif.
