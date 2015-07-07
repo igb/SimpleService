@@ -27,7 +27,6 @@ loop(ListenSock, Functions, Pid) ->
 
 
 handle_request(Sock, Functions, Pid) ->
-     io:fwrite("sock: ~p", [Sock]),		     
      case Sock of 
     	 {sslsocket, _,_} -> {ok, {http_request, Method, Path, Version}}=ssl:recv(Sock, 0);
 	 	        _ -> {ok, {http_request, Method, Path, Version}}=gen_tcp:recv(Sock, 0)
@@ -54,7 +53,7 @@ send_http_redirect(Sock,Location)->
   send_http_redirect(Sock,Location, []).
 
 send_http_redirect(Sock, Location, Headers)->
-    send_message(Sock, nil, "text/html", 302, "Found", [{"Location", Location}]).
+    send_message(Sock, nil, "text/html", 302, "Found", lists:append(Headers, [{"Location", Location}])).
 
 send_plaintext_message(Sock,Message)->
     send_plaintext_message(Sock,Message,[]).
@@ -73,7 +72,8 @@ send_message(Sock, Message, ContentType, StatusCode, StatusDescription, Headers)
 	_ ->
 	  MessageContent = lists:flatten(["HTTP/1.1 ", io_lib:format("~p ", [StatusCode]), StatusDescription, "\r\nContent-Type: ", ContentType, "; charset=UTF-8\r\n", flatten_http_headers(Headers),"Connection: close\r\n\r\n", Message,"\r\n\r\n"])
     end,
- case Sock of
+    case Sock of
+
        {sslsocket, _,_} ->  ssl:send(Sock, MessageContent);
        		      _ ->  gen_tcp:send(Sock, MessageContent)
   end.
